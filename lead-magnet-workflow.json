@@ -1,0 +1,147 @@
+{
+  "name": "Lead Magnet Zenklub - Higienizado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teste-depressao",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "webhook-depressao",
+      "name": "Teste depressão",
+      "webhookId": "ID-REMOVIDO"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teste-ansiedade",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 192],
+      "id": "webhook-ansiedade",
+      "name": "Teste de Ansiedade",
+      "webhookId": "ID-REMOVIDO"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body;\nconst response = body.form_response;\nconst answers = response.answers || [];\nconst definition = response.definition || {};\nconst fields = definition.fields || [];\n\nconst marca = \"Zenklub\";\n\nconst email_field = answers.find(a => a.type === 'email');\nconst email = email_field ? email_field.email.toLowerCase().trim() : null;\n\nlet nomeFinal = \"\";\nconst nomesEncontrados = answers.filter(a => {\n  const fieldDef = fields.find(f => f.id === a.field.id);\n  const title = (fieldDef?.title || \"\").toLowerCase();\n  return a.type === 'text' && (title.includes('nome') || title.includes('name'));\n});\n\nif (nomesEncontrados.length > 0) {\n  nomeFinal = nomesEncontrados.map(n => n.text.trim()).join(\" \");\n}\n\nif (!nomeFinal || nomeFinal.trim() === \"\") {\n  nomeFinal = \"Usuário\";\n}\n\nconst tel_field = answers.find(a => a.type === 'phone_number');\nconst telefone = tel_field ? tel_field.phone_number : \"Não informado\";\n\nconst score = response.calculated?.score || 0;\nconst teste_nome = definition.title || \"Teste Zenklub\";\nconst data_envio = response.submitted_at;\nconst lead_id = response.token;\n\nreturn [{\n  json: {\n    email,\n    nome: nomeFinal,\n    telefone,\n    marca,\n    teste_nome,\n    score,\n    data_envio,\n    lead_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [944, 624],
+      "id": "code-javascript",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "ID-PLANILHA-REMOVIDO",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $json.marca }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1568, 624],
+      "id": "google-sheets-node",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ID-CREDENTIALS-REMOVIDO",
+          "name": "Google Sheets Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unification.useinsider.com/api/user/v1/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-PARTNER-NAME",
+              "value": "SEU_PARTNER_NAME"
+            },
+            {
+              "name": "X-REQUEST-TOKEN",
+              "value": "SEU_REQUEST_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"users\": [\n    {\n      \"identifiers\": {\n        \"email\": \"{{ $json.email }}\"\n      },\n      \"attributes\": {\n        \"name\": \"{{ $json.nome.split(' ')[0] }}\",\n        \"surname\": \"{{ $json.nome.split(' ').slice(1).join(' ') || '' }}\",\n        \"phone_number\": \"{{ $json.telefone }}\",\n        \"email_optin\": true,\n        \"sms_optin\": true,\n        \"custom\": {\n          \"test_score\": {{ $json.score }},\n          \"last_test_name\": \"{{ $json.teste_nome }}\"\n        }\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2096, 624],
+      "id": "insider-upsert",
+      "name": "Atualiza ou cria usuário na Insider"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://unification.useinsider.com/api/user/v1/upsert",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-PARTNER-NAME",
+              "value": "SEU_PARTNER_NAME"
+            },
+            {
+              "name": "X-REQUEST-TOKEN",
+              "value": "SEU_REQUEST_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"skip_hook\": false,\n  \"users\": [\n    {\n      \"identifiers\": {\n        \"email\": \"{{$('Filter1').item.json.email}}\"\n      },\n      \"events\": [\n        {\n          \"event_name\": \"survey_completed_lead\",\n          \"timestamp\": \"{{$now}}\",\n          \"event_params\": {\n            \"custom\": {\n              \"test_name\": \"{{$('Filter1').item.json.teste_nome}}\",\n              \"score\": \"{{$('Filter1').item.json.score}}\",\n              \"from\": \"typeform\",\n              \"interaction\": \"completed\"\n            }\n          }\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2320, 624],
+      "id": "insider-event",
+      "name": "Registra Evento na Insider"
+    }
+  ],
+  "connections": {
+    "Teste depressão": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] },
+    "Teste de Ansiedade": { "main": [[{ "node": "Code in JavaScript", "type": "main", "index": 0 }]] },
+    "Code in JavaScript": { "main": [[{ "node": "Filter", "type": "main", "index": 0 }]] },
+    "Filter": { "main": [[{ "node": "Append row in sheet", "type": "main", "index": 0 }]] },
+    "Append row in sheet": { "main": [[{ "node": "Filter1", "type": "main", "index": 0 }]] },
+    "Filter1": { "main": [[{ "node": "Atualiza ou cria usuário na Insider", "type": "main", "index": 0 }]] },
+    "Atualiza ou cria usuário na Insider": { "main": [[{ "node": "Registra Evento na Insider", "type": "main", "index": 0 }]] }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" }
+}
